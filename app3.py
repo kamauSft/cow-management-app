@@ -23,6 +23,20 @@ st.markdown(
         border-radius: 10px !important;
         box-shadow: 0 4px 12px rgb(0 0 0 / 0.1) !important;
     }
+    footer {
+        visibility: hidden;
+    }
+    .footer-style {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        background-color: #f0f4f8;
+        color: #666666;
+        text-align: center;
+        padding: 0.5rem;
+        font-size: 0.9rem;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -58,12 +72,10 @@ Make informed decisions based on accurate, up-to-date data.
 # ---- INPUTS ----
 st.sidebar.header("Settings")
 
-# Milk prices for different milking times
 milk_price_am = st.sidebar.number_input("Milk Price Morning (AM) per Liter", min_value=0.0, value=40.0, step=0.5)
 milk_price_mid = st.sidebar.number_input("Milk Price Mid Morning per Liter", min_value=0.0, value=38.0, step=0.5)
 milk_price_pm = st.sidebar.number_input("Milk Price Evening (PM) per Liter", min_value=0.0, value=42.0, step=0.5)
 
-# Feed reorder threshold input
 reorder_threshold = st.sidebar.number_input("Feed Reorder Threshold", min_value=0, value=50, step=1)
 
 # --- Calculations for profitability ---
@@ -72,23 +84,18 @@ expense_columns = ['Expenses: Feed', 'Expenses: Labor', 'Expenses: Utilities',
                    'Salt Cost', 'Silage Cost', 'Vaccination Cost', 'Milking Labor Cost',
                    'Electricity Cost', 'Other Medical Costs', 'AI Cost', 'Pregnancy Test Cost']
 
-# Milk columns - assuming these exist, add Mid Morning if you have that column (or else omit)
 milk_am_col = 'Milk AM (L)'
-milk_mid_col = 'Milk Mid Morning (L)'  # Adjust if you have this column, else remove references
+milk_mid_col = 'Milk Mid Morning (L)'
 milk_pm_col = 'Milk PM (L)'
 
 milk_columns_available = [c for c in [milk_am_col, milk_mid_col, milk_pm_col] if c in df.columns]
 
 if all(x in df.columns for x in ['Cow ID'] + expense_columns) and len(milk_columns_available) > 0:
-    # Total milk per milking time
     df['Income AM'] = df[milk_am_col] * milk_price_am if milk_am_col in df.columns else 0
     df['Income Mid'] = df[milk_mid_col] * milk_price_mid if milk_mid_col in df.columns else 0
     df['Income PM'] = df[milk_pm_col] * milk_price_pm if milk_pm_col in df.columns else 0
-    # Total Income per cow
     df['Income'] = df[['Income AM', 'Income Mid', 'Income PM']].sum(axis=1)
-    # Total Expenses
     df['Total Expenses'] = df[expense_columns].sum(axis=1)
-    # Profit
     df['Profit'] = df['Income'] - df['Total Expenses']
 else:
     st.warning("Some milk or expense columns missing, profitability and valuation won't be calculated.")
@@ -111,7 +118,6 @@ if 'Income' in df.columns and 'Total Expenses' in df.columns:
         else:
             st.error("⚠️ Farm is running at a loss (Income < Expenses)")
 
-    # Income vs Expenses bar chart
     fig, ax = plt.subplots()
     ax.bar(['Income', 'Expenses'], [total_income, total_expenses], color=['#4CAF50', '#F44336'])
     ax.set_ylabel("Ksh")
@@ -159,17 +165,26 @@ if 'Income' in df.columns:
 else:
     st.info("Income data unavailable for valuation.")
 
-# --- Data Filtering by Date of Birth ---
-st.header("🔍 Filter & Explore Data by Date of Birth")
+# --- Filters by Date of Birth and Cow ID/Name ---
+st.header("🔍 Filter & Explore Data")
 
+filtered_df = df.copy()
+
+# Filter by Date of Birth
 if 'Date of Birth' in df.columns:
     min_date = df['Date of Birth'].min()
     max_date = df['Date of Birth'].max()
     date_range = st.date_input("Select Date of Birth Range", [min_date, max_date])
-    filtered_df = df[(df['Date of Birth'] >= pd.to_datetime(date_range[0])) &
-                     (df['Date of Birth'] <= pd.to_datetime(date_range[1]))]
-else:
-    filtered_df = df.copy()
+    filtered_df = filtered_df[(filtered_df['Date of Birth'] >= pd.to_datetime(date_range[0])) &
+                              (filtered_df['Date of Birth'] <= pd.to_datetime(date_range[1]))]
+
+# Filter by Cow ID or Name
+search_term = st.text_input("Search Cow by ID or Name")
+if search_term:
+    filtered_df = filtered_df[
+        filtered_df['Cow ID'].astype(str).str.contains(search_term, case=False, na=False) |
+        filtered_df.get('Cow Name', pd.Series()).astype(str).str.contains(search_term, case=False, na=False)
+    ]
 
 # --- Time Series Plots (2 per row) ---
 st.header("📈 Time Series Plots")
@@ -212,3 +227,10 @@ for i in range(0, len(categorical_cols), 2):
 # --- Data Preview ---
 st.header("📋 Data Preview")
 st.dataframe(filtered_df)
+
+# --- Footer Notification ---
+st.markdown("""
+<div class="footer-style">
+Built with ❤️ using Python, Google Sheets API, and Streamlit pipelines
+</div>
+""", unsafe_allow_html=True)
