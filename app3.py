@@ -143,7 +143,8 @@ else:
 st.header("💰 Farm Valuation")
 valuation_col = 'valuation '
 if valuation_col in df.columns:
-    df[valuation_col] = df[valuation_col].astype(str).str.replace(',', '').astype(float)
+    # Safe conversion to numeric with coercion for invalid values
+    df[valuation_col] = pd.to_numeric(df[valuation_col].astype(str).str.replace(',', ''), errors='coerce')
     total_valuation = df[valuation_col].sum()
     st.write(f"Total Farm Valuation from Cow Assets: **Ksh {total_valuation:,.2f}**")
 else:
