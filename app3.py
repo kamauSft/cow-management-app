@@ -104,37 +104,15 @@ if all(x in df.columns for x in ['Cow ID'] + expense_columns) and len(milk_colum
 else:
     st.warning("Milk or expense columns missing, profitability won't be calculated.")
 
-# Break-even analysis
-st.header("📊 Break-Even Analysis")
-if 'Income' in df.columns and 'Total Expenses' in df.columns:
-    total_income = df['Income'].sum()
-    total_expenses = df['Total Expenses'].sum()
-    break_even = total_income >= total_expenses
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Total Income (Ksh)", f"{total_income:,.2f}")
-        st.metric("Total Expenses (Ksh)", f"{total_expenses:,.2f}")
-    with col2:
-        if break_even:
-            st.success("✅ Farm is profitable (Income ≥ Expenses)")
-        else:
-            st.error("⚠️ Farm running at loss (Income < Expenses)")
-
-    fig, ax = plt.subplots()
-    ax.bar(['Income', 'Expenses'], [total_income, total_expenses], color=['#4CAF50', '#F44336'])
-    ax.set_ylabel("Ksh")
-    ax.set_title("Total Income vs Expenses")
-    st.pyplot(fig)
-else:
-    st.info("Profitability data unavailable.")
-
 # Feed reorder alerts
 st.header("⚠️ Feed Reorder Alerts")
 
 feed_stock_col = 'Feeds (kg)'
 
 if feed_stock_col in df.columns:
+    # Convert feed stock column to numeric to avoid errors
+    df[feed_stock_col] = pd.to_numeric(df[feed_stock_col], errors='coerce')
+
     low_feed = df[df[feed_stock_col] <= reorder_threshold_default]
     if not low_feed.empty:
         st.warning(f"Feeds that need reordering (threshold ≤ {reorder_threshold_default} kg):")
