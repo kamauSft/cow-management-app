@@ -85,6 +85,10 @@ milk_evening_col = 'Sold Milk Evening  (L)'    # double spaces after 'Evening'
 
 milk_columns_available = [c for c in [milk_morning_col, milk_mid_morning_col, milk_evening_col] if c in df.columns]
 
+# Convert milk columns to numeric (fixes multiplication errors)
+for col in milk_columns_available:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+
 if all(x in df.columns for x in ['Cow ID'] + expense_columns) and len(milk_columns_available) > 0:
     df['Income Morning'] = df[milk_morning_col] * milk_price_morning if milk_morning_col in df.columns else 0
     df['Income Mid Morning'] = df[milk_mid_morning_col] * milk_price_mid_morning if milk_mid_morning_col in df.columns else 0
@@ -123,10 +127,8 @@ else:
 # Feed reorder alerts
 st.header("⚠️ Feed Reorder Alerts")
 
-# Use 'Feeds (kg)' as feed stock column (from your sheet)
 feed_stock_col = 'Feeds (kg)'
 
-# No reorder column exists, use default reorder threshold
 if feed_stock_col in df.columns:
     low_feed = df[df[feed_stock_col] <= reorder_threshold_default]
     if not low_feed.empty:
