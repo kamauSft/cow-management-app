@@ -12,13 +12,11 @@ sns.set_style('whitegrid')
 st.markdown(
     """
     <style>
-    /* Background for entire app */
     .stApp, .main {
         background-color: #f0f4f8 !important;  /* Soft light blue-gray */
         color: #333333;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    /* Style for main containers */
     .css-1d391kg, .css-1v3fvcr {
         background-color: white !important;
         padding: 1rem !important;
@@ -40,14 +38,14 @@ data = sheet.get_all_records()
 df = pd.DataFrame(data)
 
 # Convert date columns
-date_cols = ['Insemination Date']
+date_cols = ['Date of Birth']
 for col in date_cols:
     if col in df.columns:
         df[col] = pd.to_datetime(df[col], errors='coerce')
 
-# Calculate Expected Birth Date
+# Calculate Expected Birth Date from Insemination Date if available
 if 'Insemination Date' in df.columns:
-    df['Expected Birth Date'] = df['Insemination Date'] + timedelta(days=283)
+    df['Expected Birth Date'] = pd.to_datetime(df['Insemination Date'], errors='coerce') + timedelta(days=283)
 
 # ---- FARM INTRODUCTION ----
 st.title("🐄 Robust Cow Management Dashboard")
@@ -59,21 +57,38 @@ Make informed decisions based on accurate, up-to-date data.
 
 # ---- INPUTS ----
 st.sidebar.header("Settings")
-milk_price = st.sidebar.number_input("Current Milk Selling Price (per Liter)", min_value=0.0, value=40.0, step=0.5)
+
+# Milk prices for different milking times
+milk_price_am = st.sidebar.number_input("Milk Price Morning (AM) per Liter", min_value=0.0, value=40.0, step=0.5)
+milk_price_mid = st.sidebar.number_input("Milk Price Mid Morning per Liter", min_value=0.0, value=38.0, step=0.5)
+milk_price_pm = st.sidebar.number_input("Milk Price Evening (PM) per Liter", min_value=0.0, value=42.0, step=0.5)
+
+# Feed reorder threshold input
+reorder_threshold = st.sidebar.number_input("Feed Reorder Threshold", min_value=0, value=50, step=1)
 
 # --- Calculations for profitability ---
 
-# Compute Total Income and Expenses per cow if available
 expense_columns = ['Expenses: Feed', 'Expenses: Labor', 'Expenses: Utilities',
                    'Salt Cost', 'Silage Cost', 'Vaccination Cost', 'Milking Labor Cost',
                    'Electricity Cost', 'Other Medical Costs', 'AI Cost', 'Pregnancy Test Cost']
 
-milk_columns = ['Milk AM (L)', 'Milk PM (L)', 'Sold Milk (L)', 'Household Use (L)']
+# Milk columns - assuming these exist, add Mid Morning if you have that column (or else omit)
+milk_am_col = 'Milk AM (L)'
+milk_mid_col = 'Milk Mid Morning (L)'  # Adjust if you have this column, else remove references
+milk_pm_col = 'Milk PM (L)'
 
-if all(x in df.columns for x in ['Cow ID'] + milk_columns + expense_columns):
-    df['Total Milk (L)'] = df[milk_columns].sum(axis=1)
+milk_columns_available = [c for c in [milk_am_col, milk_mid_col, milk_pm_col] if c in df.columns]
+
+if all(x in df.columns for x in ['Cow ID'] + expense_columns) and len(milk_columns_available) > 0:
+    # Total milk per milking time
+    df['Income AM'] = df[milk_am_col] * milk_price_am if milk_am_col in df.columns else 0
+    df['Income Mid'] = df[milk_mid_col] * milk_price_mid if milk_mid_col in df.columns else 0
+    df['Income PM'] = df[milk_pm_col] * milk_price_pm if milk_pm_col in df.columns else 0
+    # Total Income per cow
+    df['Income'] = df[['Income AM', 'Income Mid', 'Income PM']].sum(axis=1)
+    # Total Expenses
     df['Total Expenses'] = df[expense_columns].sum(axis=1)
-    df['Income'] = df['Total Milk (L)'] * milk_price
+    # Profit
     df['Profit'] = df['Income'] - df['Total Expenses']
 else:
     st.warning("Some milk or expense columns missing, profitability and valuation won't be calculated.")
@@ -105,6 +120,19 @@ if 'Income' in df.columns and 'Total Expenses' in df.columns:
 else:
     st.info("Profitability data unavailable.")
 
+# ---- Feed Reorder Alerts ----
+st.header("⚠️ Feed Reorder Alerts")
+
+if 'Feed Stock' in df.columns:
+    low_feed = df[df['Feed Stock'] <= reorder_threshold]
+    if not low_feed.empty:
+        st.warning(f"Feeds to reorder (stock ≤ {reorder_threshold}):")
+        st.dataframe(low_feed[['Feed Name', 'Feed Stock']])
+    else:
+        st.success("All feed stocks are sufficient.")
+else:
+    st.info("Feed Stock data unavailable.")
+
 # ---- Most Profitable and Most Expensive Cows ----
 st.header("🐮 Cow Profitability Ranking")
 
@@ -125,23 +153,21 @@ else:
 # ---- Farm Valuation Section ----
 st.header("💰 Farm Valuation")
 
-if 'Total Milk (L)' in df.columns:
-    total_milk = df['Total Milk (L)'].sum()
-    estimated_value = total_milk * milk_price
-    st.write(f"Total Milk Production: {total_milk:,.2f} Liters")
-    st.write(f"Estimated Farm Value based on current milk price: **Ksh {estimated_value:,.2f}**")
+if 'Income' in df.columns:
+    total_income = df['Income'].sum()
+    st.write(f"Estimated Farm Value based on current milk prices: **Ksh {total_income:,.2f}**")
 else:
-    st.info("Milk production data unavailable for valuation.")
+    st.info("Income data unavailable for valuation.")
 
-# --- Data Filtering ---
-st.header("🔍 Filter & Explore Data")
+# --- Data Filtering by Date of Birth ---
+st.header("🔍 Filter & Explore Data by Date of Birth")
 
-if 'Insemination Date' in df.columns:
-    min_date = df['Insemination Date'].min()
-    max_date = df['Insemination Date'].max()
-    date_range = st.date_input("Filter by Insemination Date Range", [min_date, max_date])
-    filtered_df = df[(df['Insemination Date'] >= pd.to_datetime(date_range[0])) &
-                     (df['Insemination Date'] <= pd.to_datetime(date_range[1]))]
+if 'Date of Birth' in df.columns:
+    min_date = df['Date of Birth'].min()
+    max_date = df['Date of Birth'].max()
+    date_range = st.date_input("Select Date of Birth Range", [min_date, max_date])
+    filtered_df = df[(df['Date of Birth'] >= pd.to_datetime(date_range[0])) &
+                     (df['Date of Birth'] <= pd.to_datetime(date_range[1]))]
 else:
     filtered_df = df.copy()
 
@@ -155,16 +181,16 @@ for i in range(0, len(numeric_cols), 2):
     for j, col_name in enumerate(numeric_cols[i:i+2]):
         with cols[j]:
             st.subheader(f"{col_name} Over Time")
-            if 'Insemination Date' in filtered_df.columns:
+            if 'Date of Birth' in filtered_df.columns:
                 fig, ax = plt.subplots(figsize=(6, 3.5))
-                sns.lineplot(data=filtered_df, x='Insemination Date', y=col_name, marker='o', ax=ax)
-                ax.set_xlabel("Insemination Date")
+                sns.lineplot(data=filtered_df, x='Date of Birth', y=col_name, marker='o', ax=ax)
+                ax.set_xlabel("Date of Birth")
                 ax.set_ylabel(col_name)
                 plt.xticks(rotation=45)
                 plt.tight_layout()
                 st.pyplot(fig)
             else:
-                st.write(f"Cannot plot {col_name} - 'Insemination Date' missing.")
+                st.write(f"Cannot plot {col_name} - 'Date of Birth' missing.")
 
 # --- Pie Charts (2 per row) ---
 st.header("📊 Categorical Data Distributions")
