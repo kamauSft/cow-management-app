@@ -196,19 +196,21 @@ if search_term:
         filtered_df.get('Name', pd.Series(dtype=str)).astype(str).str.contains(search_term, case=False, na=False)
     ]
 
-# Number of cows over time
-st.header("📊 Number of Cows Over Time")
+# Cumulative Number of Cows Over Time
+st.header("📊 Cumulative Number of Cows Over Time")
 if 'Date of Birth' in filtered_df.columns:
-    count_df = filtered_df.groupby('Date of Birth')['Cow ID'].nunique().reset_index()
+    birth_counts = filtered_df.groupby('Date of Birth')['Cow ID'].nunique().sort_index()
+    count_df = birth_counts.cumsum().reset_index()
+    count_df.rename(columns={'Cow ID': 'Cumulative Number of Cows'}, inplace=True)
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.lineplot(data=count_df, x='Date of Birth', y='Cow ID', marker='o', ax=ax)
+    sns.lineplot(data=count_df, x='Date of Birth', y='Cumulative Number of Cows', marker='o', ax=ax)
     ax.set_xlabel("Date of Birth")
-    ax.set_ylabel("Number of Cows")
+    ax.set_ylabel("Cumulative Number of Cows")
     plt.xticks(rotation=45)
     plt.tight_layout()
     st.pyplot(fig)
 else:
-    st.info("Date of Birth column missing for cow count plot.")
+    st.info("Date of Birth column missing for cumulative cow count plot.")
 
 # Pie chart: Cow Category distribution
 if 'Cow Category' in df.columns:
