@@ -197,4 +197,32 @@ search_term = st.text_input("Search Cow by ID or Name")
 if search_term:
     filtered_df = filtered_df[
         filtered_df['Cow ID'].astype(str).str.contains(search_term, case=False, na=False) |
-        filtered_df.get('Cow Name', pd.Series()).astype(str).str.contains(search_term, case=False, na=False)
+        filtered_df.get('Cow Name', pd.Series(dtype=str)).astype(str).str.contains(search_term, case=False, na=False)
+    ]
+
+# --- Number of Cows Over Time ---
+st.header("📊 Number of Cows Over Time")
+
+if 'Date of Birth' in filtered_df.columns:
+    count_df = filtered_df.groupby('Date of Birth')['Cow ID'].nunique().reset_index()
+    fig, ax = plt.subplots(figsize=(8, 4))
+    sns.lineplot(data=count_df, x='Date of Birth', y='Cow ID', marker='o', ax=ax)
+    ax.set_xlabel("Date of Birth")
+    ax.set_ylabel("Number of Cows")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    st.pyplot(fig)
+else:
+    st.info("Date of Birth column missing for cow count plot.")
+
+# --- Time Series Plots (2 per row) ---
+st.header("📈 Time Series Plots")
+
+numeric_cols = [col for col in filtered_df.select_dtypes(include=['number']).columns.tolist() if col not in ['Cow ID', 'Tag Number']]
+
+for i in range(0, len(numeric_cols), 2):
+    cols = st.columns(2)
+    for j, col_name in enumerate(numeric_cols[i:i+2]):
+        with cols[j]:
+            st.subheader(f"{col_name} Over Time")
+            if 'Date of
