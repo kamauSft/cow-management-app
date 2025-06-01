@@ -13,7 +13,7 @@ st.markdown(
     """
     <style>
     .stApp, .main {
-        background-color: #f0f4f8 !important;  /* Soft light blue-gray */
+        background-color: #f0f4f8 !important;
         color: #333333;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
@@ -44,7 +44,7 @@ st.markdown(
 
 # --- Google Sheets API Setup ---
 scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-json_path = r"C:\Users\USER\Videos\cow-management-app-461516-fdac9aa4f0a2.json"  # Update this path
+json_path = r"C:\Users\USER\Videos\cow-management-app-461516-fdac9aa4f0a2.json"  # Update your path
 creds = ServiceAccountCredentials.from_json_keyfile_name(json_path, scope)
 client = gspread.authorize(creds)
 sheet = client.open('Cow Management Input').sheet1
@@ -61,7 +61,7 @@ for col in date_cols:
 if 'Insemination Date' in df.columns:
     df['Expected Birth Date'] = pd.to_datetime(df['Insemination Date'], errors='coerce') + timedelta(days=283)
 
-# ---- FARM INTRODUCTION ----
+# ---- Farm Introduction ----
 st.title("🐄 Robust Cow Management Dashboard")
 st.markdown("""
 Welcome to the Cow Management Dashboard!  
@@ -69,14 +69,14 @@ Track your herd's health, expenses, income, and profitability in real time.
 Make informed decisions based on accurate, up-to-date data.
 """)
 
-# ---- INPUTS ----
+# ---- Sidebar Inputs ----
 st.sidebar.header("Settings")
 
 milk_price_morning = st.sidebar.number_input("Milk Price Morning per Liter", min_value=0.0, value=40.0, step=0.5)
 milk_price_mid_morning = st.sidebar.number_input("Milk Price Mid Morning per Liter", min_value=0.0, value=38.0, step=0.5)
 milk_price_evening = st.sidebar.number_input("Milk Price Evening per Liter", min_value=0.0, value=42.0, step=0.5)
 
-reorder_threshold_default = 50  # fallback default if no Reorder Level column
+reorder_threshold_default = 50  # fallback if Reorder Level missing
 
 # --- Calculations for profitability ---
 
@@ -225,4 +225,24 @@ for i in range(0, len(numeric_cols), 2):
     for j, col_name in enumerate(numeric_cols[i:i+2]):
         with cols[j]:
             st.subheader(f"{col_name} Over Time")
-            if 'Date of
+            if 'Date of Birth' in filtered_df.columns:
+                fig, ax = plt.subplots(figsize=(6, 3.5))
+                sns.lineplot(data=filtered_df, x='Date of Birth', y=col_name, marker='o', ax=ax)
+                ax.set_xlabel("Date of Birth")
+                ax.set_ylabel(col_name)
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                st.pyplot(fig)
+            else:
+                st.write(f"Cannot plot {col_name} - 'Date of Birth' missing.")
+
+# --- Data Preview ---
+st.header("📋 Data Preview")
+st.dataframe(filtered_df)
+
+# --- Footer Notification ---
+st.markdown("""
+<div class="footer-style">
+Built with Python, Google Sheets API, and Streamlit pipelines
+</div>
+""", unsafe_allow_html=True)
