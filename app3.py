@@ -89,6 +89,11 @@ milk_columns_available = [c for c in [milk_morning_col, milk_mid_morning_col, mi
 for col in milk_columns_available:
     df[col] = pd.to_numeric(df[col], errors='coerce')
 
+# Convert expense columns to numeric to avoid subtraction errors
+for col in expense_columns:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
 if all(x in df.columns for x in ['Cow ID'] + expense_columns) and len(milk_columns_available) > 0:
     df['Income Morning'] = df[milk_morning_col] * milk_price_morning if milk_morning_col in df.columns else 0
     df['Income Mid Morning'] = df[milk_mid_morning_col] * milk_price_mid_morning if milk_mid_morning_col in df.columns else 0
