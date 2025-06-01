@@ -6,23 +6,24 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import timedelta
 
-# Set seaborn style
 sns.set_style('whitegrid')
 
 # --- Custom CSS for background and style ---
 st.markdown(
     """
     <style>
-    .stApp {
-        background-color: #f9f9f9;  /* Soft light gray background */
+    /* Background for entire app */
+    .stApp, .main {
+        background-color: #f0f4f8 !important;  /* Soft light blue-gray */
         color: #333333;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .css-1d391kg {
-        background-color: white;
-        padding: 1rem;
-        border-radius: 10px;
-        box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
+    /* Style for main containers */
+    .css-1d391kg, .css-1v3fvcr {
+        background-color: white !important;
+        padding: 1rem !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 12px rgb(0 0 0 / 0.1) !important;
     }
     </style>
     """,
@@ -63,25 +64,19 @@ milk_price = st.sidebar.number_input("Current Milk Selling Price (per Liter)", m
 # --- Calculations for profitability ---
 
 # Compute Total Income and Expenses per cow if available
-if all(x in df.columns for x in ['Cow ID', 'Milk AM (L)', 'Milk PM (L)', 'Sold Milk (L)', 'Household Use (L)', 
-                                'Expenses: Feed', 'Expenses: Labor', 'Expenses: Utilities',
-                                'Salt Cost', 'Silage Cost', 'Vaccination Cost', 'Milking Labor Cost',
-                                'Electricity Cost', 'Other Medical Costs', 'AI Cost', 'Pregnancy Test Cost']):
-    
-    # Total milk produced per cow per day (sum AM, PM, Sold, Household use)
-    df['Total Milk (L)'] = df[['Milk AM (L)', 'Milk PM (L)', 'Sold Milk (L)', 'Household Use (L)']].sum(axis=1)
-    # Total expenses per cow
-    expense_cols = ['Expenses: Feed', 'Expenses: Labor', 'Expenses: Utilities',
-                    'Salt Cost', 'Silage Cost', 'Vaccination Cost', 'Milking Labor Cost',
-                    'Electricity Cost', 'Other Medical Costs', 'AI Cost', 'Pregnancy Test Cost']
-    df['Total Expenses'] = df[expense_cols].sum(axis=1)
-    # Income = milk price * total milk produced
-    df['Income'] = df['Total Milk (L)'] * milk_price
-    # Profit = Income - Expenses
-    df['Profit'] = df['Income'] - df['Total Expenses']
+expense_columns = ['Expenses: Feed', 'Expenses: Labor', 'Expenses: Utilities',
+                   'Salt Cost', 'Silage Cost', 'Vaccination Cost', 'Milking Labor Cost',
+                   'Electricity Cost', 'Other Medical Costs', 'AI Cost', 'Pregnancy Test Cost']
 
+milk_columns = ['Milk AM (L)', 'Milk PM (L)', 'Sold Milk (L)', 'Household Use (L)']
+
+if all(x in df.columns for x in ['Cow ID'] + milk_columns + expense_columns):
+    df['Total Milk (L)'] = df[milk_columns].sum(axis=1)
+    df['Total Expenses'] = df[expense_columns].sum(axis=1)
+    df['Income'] = df['Total Milk (L)'] * milk_price
+    df['Profit'] = df['Income'] - df['Total Expenses']
 else:
-    st.warning("Some expense or milk columns missing, profitability and valuation won't be calculated.")
+    st.warning("Some milk or expense columns missing, profitability and valuation won't be calculated.")
 
 # ---- Break-even point calculation ----
 st.header("📊 Break-Even Analysis")
@@ -100,8 +95,8 @@ if 'Income' in df.columns and 'Total Expenses' in df.columns:
             st.success("✅ Farm is currently profitable (Income ≥ Expenses)")
         else:
             st.error("⚠️ Farm is running at a loss (Income < Expenses)")
-    
-    # Plot Income vs Expenses bar chart
+
+    # Income vs Expenses bar chart
     fig, ax = plt.subplots()
     ax.bar(['Income', 'Expenses'], [total_income, total_expenses], color=['#4CAF50', '#F44336'])
     ax.set_ylabel("Ksh")
@@ -150,39 +145,43 @@ if 'Insemination Date' in df.columns:
 else:
     filtered_df = df.copy()
 
-# --- Time Series Plots ---
+# --- Time Series Plots (2 per row) ---
 st.header("📈 Time Series Plots")
 
-numeric_cols = filtered_df.select_dtypes(include=['number']).columns.tolist()
+numeric_cols = [col for col in filtered_df.select_dtypes(include=['number']).columns.tolist() if col not in ['Cow ID', 'Tag Number']]
 
-for col in numeric_cols:
-    if col in ['Cow ID', 'Tag Number']:  # Skip IDs for plotting
-        continue
-    st.subheader(f"{col} Over Time")
-    if 'Insemination Date' in filtered_df.columns:
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.lineplot(data=filtered_df, x='Insemination Date', y=col, marker='o', ax=ax)
-        ax.set_xlabel("Insemination Date")
-        ax.set_ylabel(col)
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig)
-    else:
-        st.write(f"Cannot plot {col} - 'Insemination Date' missing.")
+for i in range(0, len(numeric_cols), 2):
+    cols = st.columns(2)
+    for j, col_name in enumerate(numeric_cols[i:i+2]):
+        with cols[j]:
+            st.subheader(f"{col_name} Over Time")
+            if 'Insemination Date' in filtered_df.columns:
+                fig, ax = plt.subplots(figsize=(6, 3.5))
+                sns.lineplot(data=filtered_df, x='Insemination Date', y=col_name, marker='o', ax=ax)
+                ax.set_xlabel("Insemination Date")
+                ax.set_ylabel(col_name)
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                st.pyplot(fig)
+            else:
+                st.write(f"Cannot plot {col_name} - 'Insemination Date' missing.")
 
-# --- Pie Charts for Categorical Variables ---
+# --- Pie Charts (2 per row) ---
 st.header("📊 Categorical Data Distributions")
 
 categorical_cols = filtered_df.select_dtypes(include=['object']).columns.tolist()
 
-for col in categorical_cols:
-    st.subheader(f"{col} Distribution")
-    counts = filtered_df[col].value_counts()
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.pie(counts, labels=counts.index, autopct='%1.1f%%', startangle=140)
-    ax.axis('equal')
-    plt.tight_layout()
-    st.pyplot(fig)
+for i in range(0, len(categorical_cols), 2):
+    cols = st.columns(2)
+    for j, col_name in enumerate(categorical_cols[i:i+2]):
+        with cols[j]:
+            st.subheader(f"{col_name} Distribution")
+            counts = filtered_df[col_name].value_counts()
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.pie(counts, labels=counts.index, autopct='%1.1f%%', startangle=140)
+            ax.axis('equal')
+            plt.tight_layout()
+            st.pyplot(fig)
 
 # --- Data Preview ---
 st.header("📋 Data Preview")
