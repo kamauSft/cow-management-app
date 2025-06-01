@@ -63,6 +63,10 @@ Track your herd's health, expenses, income, and profitability in real time.
 Make informed decisions based on accurate, up-to-date data.
 """)
 
+# Total count of cows
+total_cows = df['Cow ID'].nunique() if 'Cow ID' in df.columns else 0
+st.markdown(f"### Total Number of Cows: **{total_cows}**")
+
 # Sidebar inputs
 st.sidebar.header("Settings")
 milk_price_morning = st.sidebar.number_input("Milk Price Morning per Liter", 0.0, 1000.0, 40.0, 0.5)
@@ -104,15 +108,38 @@ if all(x in df.columns for x in ['Cow ID'] + expense_columns) and len(milk_colum
 else:
     st.warning("Milk or expense columns missing, profitability won't be calculated.")
 
+# Break-even analysis and farm profit/loss alert
+st.header("📊 Break-Even Analysis")
+if 'Income' in df.columns and 'Total Expenses' in df.columns:
+    total_income = df['Income'].sum()
+    total_expenses = df['Total Expenses'].sum()
+    break_even = total_income >= total_expenses
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total Income (Ksh)", f"{total_income:,.2f}")
+        st.metric("Total Expenses (Ksh)", f"{total_expenses:,.2f}")
+    with col2:
+        if break_even:
+            st.success("✅ Farm is currently PROFITABLE.")
+        else:
+            st.error("⚠️ Farm is currently RUNNING AT A LOSS.")
+    
+    fig, ax = plt.subplots()
+    ax.bar(['Income', 'Expenses'], [total_income, total_expenses], color=['#4CAF50', '#F44336'])
+    ax.set_ylabel("Ksh")
+    ax.set_title("Total Income vs Expenses")
+    st.pyplot(fig)
+else:
+    st.info("Profitability data unavailable.")
+
 # Feed reorder alerts
 st.header("⚠️ Feed Reorder Alerts")
 
 feed_stock_col = 'Feeds (kg)'
 
 if feed_stock_col in df.columns:
-    # Convert feed stock column to numeric to avoid errors
     df[feed_stock_col] = pd.to_numeric(df[feed_stock_col], errors='coerce')
-
     low_feed = df[df[feed_stock_col] <= reorder_threshold_default]
     if not low_feed.empty:
         st.warning(f"Feeds that need reordering (threshold ≤ {reorder_threshold_default} kg):")
@@ -143,7 +170,6 @@ else:
 st.header("💰 Farm Valuation")
 valuation_col = 'valuation '
 if valuation_col in df.columns:
-    # Safe conversion to numeric with coercion for invalid values
     df[valuation_col] = pd.to_numeric(df[valuation_col].astype(str).str.replace(',', ''), errors='coerce')
     total_valuation = df[valuation_col].sum()
     st.write(f"Total Farm Valuation from Cow Assets: **Ksh {total_valuation:,.2f}**")
@@ -183,6 +209,27 @@ if 'Date of Birth' in filtered_df.columns:
     st.pyplot(fig)
 else:
     st.info("Date of Birth column missing for cow count plot.")
+
+# Pie chart: Cow Category distribution
+if 'Cow Category' in df.columns:
+    st.header("📊 Cow Category Distribution")
+    category_counts = df['Cow Category'].value_counts()
+    fig1, ax1 = plt.subplots()
+    ax1.pie(category_counts, labels=category_counts.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette('pastel'))
+    ax1.axis('equal')
+    st.pyplot(fig1)
+
+# Pie chart: Profit vs Loss distribution
+if 'Profit' in df.columns:
+    st.header("📊 Profit vs Loss Distribution")
+    profit_loss_counts = pd.Series({
+        'Profit': (df['Profit'] > 0).sum(),
+        'Loss': (df['Profit'] <= 0).sum()
+    })
+    fig2, ax2 = plt.subplots()
+    ax2.pie(profit_loss_counts, labels=profit_loss_counts.index, autopct='%1.1f%%', startangle=90, colors=['#4CAF50', '#F44336'])
+    ax2.axis('equal')
+    st.pyplot(fig2)
 
 # Time series plots (2 per row)
 st.header("📈 Time Series Plots")
