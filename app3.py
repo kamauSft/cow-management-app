@@ -72,11 +72,11 @@ Make informed decisions based on accurate, up-to-date data.
 # ---- INPUTS ----
 st.sidebar.header("Settings")
 
-milk_price_am = st.sidebar.number_input("Milk Price Morning (AM) per Liter", min_value=0.0, value=40.0, step=0.5)
-milk_price_mid = st.sidebar.number_input("Milk Price Mid Morning per Liter", min_value=0.0, value=38.0, step=0.5)
-milk_price_pm = st.sidebar.number_input("Milk Price Evening (PM) per Liter", min_value=0.0, value=42.0, step=0.5)
+milk_price_morning = st.sidebar.number_input("Milk Price Morning per Liter", min_value=0.0, value=40.0, step=0.5)
+milk_price_mid_morning = st.sidebar.number_input("Milk Price Mid Morning per Liter", min_value=0.0, value=38.0, step=0.5)
+milk_price_evening = st.sidebar.number_input("Milk Price Evening per Liter", min_value=0.0, value=42.0, step=0.5)
 
-reorder_threshold = st.sidebar.number_input("Feed Reorder Threshold", min_value=0, value=50, step=1)
+reorder_threshold_default = 50  # fallback default if no Reorder Level column
 
 # --- Calculations for profitability ---
 
@@ -84,17 +84,17 @@ expense_columns = ['Expenses: Feed', 'Expenses: Labor', 'Expenses: Utilities',
                    'Salt Cost', 'Silage Cost', 'Vaccination Cost', 'Milking Labor Cost',
                    'Electricity Cost', 'Other Medical Costs', 'AI Cost', 'Pregnancy Test Cost']
 
-milk_am_col = 'Milk AM (L)'
-milk_mid_col = 'Milk Mid Morning (L)'
-milk_pm_col = 'Milk PM (L)'
+milk_morning_col = 'Milk Morning (L)'
+milk_mid_morning_col = 'Milk Mid Morning (L)'
+milk_evening_col = 'Milk Evening (L)'
 
-milk_columns_available = [c for c in [milk_am_col, milk_mid_col, milk_pm_col] if c in df.columns]
+milk_columns_available = [c for c in [milk_morning_col, milk_mid_morning_col, milk_evening_col] if c in df.columns]
 
 if all(x in df.columns for x in ['Cow ID'] + expense_columns) and len(milk_columns_available) > 0:
-    df['Income AM'] = df[milk_am_col] * milk_price_am if milk_am_col in df.columns else 0
-    df['Income Mid'] = df[milk_mid_col] * milk_price_mid if milk_mid_col in df.columns else 0
-    df['Income PM'] = df[milk_pm_col] * milk_price_pm if milk_pm_col in df.columns else 0
-    df['Income'] = df[['Income AM', 'Income Mid', 'Income PM']].sum(axis=1)
+    df['Income Morning'] = df[milk_morning_col] * milk_price_morning if milk_morning_col in df.columns else 0
+    df['Income Mid Morning'] = df[milk_mid_morning_col] * milk_price_mid_morning if milk_mid_morning_col in df.columns else 0
+    df['Income Evening'] = df[milk_evening_col] * milk_price_evening if milk_evening_col in df.columns else 0
+    df['Income'] = df[['Income Morning', 'Income Mid Morning', 'Income Evening']].sum(axis=1)
     df['Total Expenses'] = df[expense_columns].sum(axis=1)
     df['Profit'] = df['Income'] - df['Total Expenses']
 else:
@@ -129,15 +129,29 @@ else:
 # ---- Feed Reorder Alerts ----
 st.header("⚠️ Feed Reorder Alerts")
 
-if 'Feed Stock' in df.columns:
-    low_feed = df[df['Feed Stock'] <= reorder_threshold]
-    if not low_feed.empty:
-        st.warning(f"Feeds to reorder (stock ≤ {reorder_threshold}):")
-        st.dataframe(low_feed[['Feed Name', 'Feed Stock']])
+required_feed_cols = ['Feed Name', 'Feed Stock', 'Reorder Level']
+
+if all(col in df.columns for col in required_feed_cols):
+    feeds_to_reorder = df[df['Feed Stock'] <= df['Reorder Level']]
+    if not feeds_to_reorder.empty:
+        st.warning("Feeds that need reordering:")
+        for _, row in feeds_to_reorder.iterrows():
+            st.write(f"- **{row['Feed Name']}**: Stock = {row['Feed Stock']}, Reorder Level = {row['Reorder Level']}")
+        st.info("Please consider ordering the above feeds to avoid stockouts.")
     else:
-        st.success("All feed stocks are sufficient.")
+        st.success("All feed stocks are above their reorder levels. No immediate action needed.")
+elif 'Feed Stock' in df.columns:
+    df['Reorder Level'] = reorder_threshold_default
+    feeds_to_reorder = df[df['Feed Stock'] <= df['Reorder Level']]
+    if not feeds_to_reorder.empty:
+        st.warning(f"Feeds that need reordering (using dummy reorder level {reorder_threshold_default}):")
+        for _, row in feeds_to_reorder.iterrows():
+            st.write(f"- **{row['Feed Name']}**: Stock = {row['Feed Stock']}")
+        st.info("Please consider ordering the above feeds to avoid stockouts.")
+    else:
+        st.success("All feed stocks are above the dummy reorder level. No immediate action needed.")
 else:
-    st.info("Feed Stock data unavailable.")
+    st.info(f"Feed reorder alert requires columns: {', '.join(required_feed_cols)}")
 
 # ---- Most Profitable and Most Expensive Cows ----
 st.header("🐮 Cow Profitability Ranking")
@@ -184,53 +198,3 @@ if search_term:
     filtered_df = filtered_df[
         filtered_df['Cow ID'].astype(str).str.contains(search_term, case=False, na=False) |
         filtered_df.get('Cow Name', pd.Series()).astype(str).str.contains(search_term, case=False, na=False)
-    ]
-
-# --- Time Series Plots (2 per row) ---
-st.header("📈 Time Series Plots")
-
-numeric_cols = [col for col in filtered_df.select_dtypes(include=['number']).columns.tolist() if col not in ['Cow ID', 'Tag Number']]
-
-for i in range(0, len(numeric_cols), 2):
-    cols = st.columns(2)
-    for j, col_name in enumerate(numeric_cols[i:i+2]):
-        with cols[j]:
-            st.subheader(f"{col_name} Over Time")
-            if 'Date of Birth' in filtered_df.columns:
-                fig, ax = plt.subplots(figsize=(6, 3.5))
-                sns.lineplot(data=filtered_df, x='Date of Birth', y=col_name, marker='o', ax=ax)
-                ax.set_xlabel("Date of Birth")
-                ax.set_ylabel(col_name)
-                plt.xticks(rotation=45)
-                plt.tight_layout()
-                st.pyplot(fig)
-            else:
-                st.write(f"Cannot plot {col_name} - 'Date of Birth' missing.")
-
-# --- Pie Charts (2 per row) ---
-st.header("📊 Categorical Data Distributions")
-
-categorical_cols = filtered_df.select_dtypes(include=['object']).columns.tolist()
-
-for i in range(0, len(categorical_cols), 2):
-    cols = st.columns(2)
-    for j, col_name in enumerate(categorical_cols[i:i+2]):
-        with cols[j]:
-            st.subheader(f"{col_name} Distribution")
-            counts = filtered_df[col_name].value_counts()
-            fig, ax = plt.subplots(figsize=(5, 5))
-            ax.pie(counts, labels=counts.index, autopct='%1.1f%%', startangle=140)
-            ax.axis('equal')
-            plt.tight_layout()
-            st.pyplot(fig)
-
-# --- Data Preview ---
-st.header("📋 Data Preview")
-st.dataframe(filtered_df)
-
-# --- Footer Notification ---
-st.markdown("""
-<div class="footer-style">
-Built with ❤️ using Python, Google Sheets API, and Streamlit pipelines
-</div>
-""", unsafe_allow_html=True)
