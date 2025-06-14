@@ -42,10 +42,16 @@ st.markdown(
 
 # --- Google Sheets API Setup ---
 scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-json_path = r"C:\Users\USER\Videos\cow-management-app-461516-fdac9aa4f0a2.json"  # Update your path here
+json_path = r"C:\Users\USER\Videos\cow-management-app-461516-fdac9aa4f0a2.json"  # Update to your actual JSON file path
+sheet_url = "https://docs.google.com/spreadsheets/d/1dUIiqW6DLDAaojNUBPlWzmSCy8OyyfVhiF3AauslYGQ/edit#gid=0"
+
+# Authorize access to Google Sheets
 creds = ServiceAccountCredentials.from_json_keyfile_name(json_path, scope)
 client = gspread.authorize(creds)
-sheet = client.open('Cow Management Input').sheet1
+
+# Open sheet by URL
+spreadsheet = client.open_by_url(sheet_url)
+sheet = spreadsheet.sheet1
 data = sheet.get_all_records()
 df = pd.DataFrame(data)
 
@@ -75,25 +81,25 @@ milk_price_evening = st.sidebar.number_input("Milk Price Evening per Liter", 0.0
 
 reorder_threshold_default = 50  # Default threshold for feed reorder
 
-# Expense columns (note trailing space on 'Pregnancy Test Cost ')
+# Expense columns
 expense_columns = [
     'Expenses: Feed', 'Expenses: Labor', 'Expenses: Utilities',
     'Salt Cost', 'Silage Cost', 'Vaccination Cost', 'Milking Labor Cost',
     'Electricity Cost', 'Other Medical Costs', 'AI Cost', 'Pregnancy Test Cost '
 ]
 
-# Milk columns (exact names including spaces)
+# Milk columns
 milk_morning_col = 'Milk Morning (L)'
-milk_mid_morning_col = 'Milk Mid Morning  (L)'  # double spaces after 'Morning'
-milk_evening_col = 'Sold Milk Evening  (L)'    # double spaces after 'Evening'
+milk_mid_morning_col = 'Milk Mid Morning  (L)'
+milk_evening_col = 'Sold Milk Evening  (L)'
 
 milk_columns_available = [c for c in [milk_morning_col, milk_mid_morning_col, milk_evening_col] if c in df.columns]
 
-# Convert milk columns to numeric (fixes multiplication errors)
+# Convert milk columns to numeric
 for col in milk_columns_available:
     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-# Convert expense columns to numeric to avoid subtraction errors
+# Convert expense columns to numeric
 for col in expense_columns:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -108,7 +114,7 @@ if all(x in df.columns for x in ['Cow ID'] + expense_columns) and len(milk_colum
 else:
     st.warning("Milk or expense columns missing, profitability won't be calculated.")
 
-# Break-even analysis and farm profit/loss alert
+# Break-even analysis
 st.header("📊 Break-Even Analysis")
 if 'Income' in df.columns and 'Total Expenses' in df.columns:
     total_income = df['Income'].sum()
@@ -135,7 +141,6 @@ else:
 
 # Feed reorder alerts
 st.header("⚠️ Feed Reorder Alerts")
-
 feed_stock_col = 'Feeds (kg)'
 
 if feed_stock_col in df.columns:
@@ -196,7 +201,7 @@ if search_term:
         filtered_df.get('Name', pd.Series(dtype=str)).astype(str).str.contains(search_term, case=False, na=False)
     ]
 
-# Cumulative Number of Cows Over Time
+# Cumulative cows
 st.header("📊 Cumulative Number of Cows Over Time")
 if 'Date of Birth' in filtered_df.columns:
     birth_counts = filtered_df.groupby('Date of Birth')['Cow ID'].nunique().sort_index()
@@ -212,7 +217,7 @@ if 'Date of Birth' in filtered_df.columns:
 else:
     st.info("Date of Birth column missing for cumulative cow count plot.")
 
-# Pie chart: Cow Category distribution
+# Cow Category distribution
 if 'Cow Category' in df.columns:
     st.header("📊 Cow Category Distribution")
     category_counts = df['Cow Category'].value_counts()
@@ -221,7 +226,7 @@ if 'Cow Category' in df.columns:
     ax1.axis('equal')
     st.pyplot(fig1)
 
-# Pie chart: Profit vs Loss distribution
+# Profit vs Loss distribution
 if 'Profit' in df.columns:
     st.header("📊 Profit vs Loss Distribution")
     profit_loss_counts = pd.Series({
@@ -233,7 +238,7 @@ if 'Profit' in df.columns:
     ax2.axis('equal')
     st.pyplot(fig2)
 
-# Time series plots (2 per row)
+# Time series plots
 st.header("📈 Time Series Plots")
 numeric_cols = [c for c in filtered_df.select_dtypes(include='number').columns if c not in ['Cow ID', 'Tag Number']]
 
